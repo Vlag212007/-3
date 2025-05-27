@@ -1,1 +1,206 @@
-# -3
+using System;
+using System.Drawing;
+using System.Windows.Forms;
+using System.Collections.Generic;
+
+namespace RabbitGame
+{
+    public class GameForm : Form
+    {
+        private readonly Timer gameTimer;
+        private readonly Random random = new Random();
+        
+        private readonly PictureBox rabbit;
+        private readonly List<PictureBox> carrots = new List<PictureBox>();
+        private readonly PictureBox wolf;
+        
+        private int score = 0;
+        private readonly Label scoreLabel;
+        
+        private int speed = 5;
+        private bool gameOver = false;
+
+        public GameForm()
+        {
+            // Настройка формы
+            this.Text = "Кролик и морковки";
+            this.ClientSize = new Size(800, 600);
+            this.DoubleBuffered = true;
+            this.BackColor = Color.LightGreen;
+            
+            // Создание кролика
+            rabbit = new PictureBox
+            {
+                Image = Properties.Resources.Rabbit, // Нужно добавить изображение в ресурсы
+                SizeMode = PictureBoxSizeMode.StretchImage,
+                Size = new Size(60, 60),
+                Location = new Point(370, 270)
+            };
+            this.Controls.Add(rabbit);
+            
+            // Создание волка
+            wolf = new PictureBox
+            {
+                Image = Properties.Resources.Wolf, // Нужно добавить изображение в ресурсы
+                SizeMode = PictureBoxSizeMode.StretchImage,
+                Size = new Size(80, 80),
+                Location = new Point(100, 100)
+            };
+            this.Controls.Add(wolf);
+            
+            // Создание метки счета
+            scoreLabel = new Label
+            {
+                Text = "Счет: 0",
+                Font = new Font("Arial", 16),
+                ForeColor = Color.Black,
+                Location = new Point(10, 10),
+                AutoSize = true
+            };
+            this.Controls.Add(scoreLabel);
+            
+            // Создание таймера
+            gameTimer = new Timer { Interval = 50 };
+            gameTimer.Tick += GameLoop;
+            gameTimer.Start();
+            
+            // Обработчики клавиш
+            this.KeyDown += MoveRabbit;
+            this.KeyPreview = true;
+            
+            // Создание начальных морковок
+            SpawnCarrots(5);
+        }
+        
+        private void SpawnCarrots(int count)
+        {
+            for (int i = 0; i < count; i++)
+            {
+                var carrot = new PictureBox
+                {
+                    Image = Properties.Resources.Carrot, // Нужно добавить изображение в ресурсы
+                    SizeMode = PictureBoxSizeMode.StretchImage,
+                    Size = new Size(40, 40),
+                    Location = new Point(
+                        random.Next(0, this.ClientSize.Width - 40),
+                        random.Next(0, this.ClientSize.Height - 40))
+                };
+                carrots.Add(carrot);
+                this.Controls.Add(carrot);
+                carrot.BringToFront();
+            }
+        }
+        
+        private void MoveRabbit(object sender, KeyEventArgs e)
+        {
+            if (gameOver) return;
+            
+            int newX = rabbit.Location.X;
+            int newY = rabbit.Location.Y;
+            
+            switch (e.KeyCode)
+            {
+                case Keys.Left: newX -= speed; break;
+                case Keys.Right: newX += speed; break;
+                case Keys.Up: newY -= speed; break;
+                case Keys.Down: newY += speed; break;
+            }
+            
+            // Проверка границ
+            newX = Math.Max(0, Math.Min(this.ClientSize.Width - rabbit.Width, newX));
+            newY = Math.Max(0, Math.Min(this.ClientSize.Height - rabbit.Height, newY));
+            
+            rabbit.Location = new Point(newX, newY);
+        }
+        
+        private void GameLoop(object sender, EventArgs e)
+        {
+            if (gameOver) return;
+            
+            // Движение волка к кролику
+            MoveWolf();
+            
+            // Проверка сбора морковок
+            CheckCarrotCollision();
+            
+            // Проверка столкновения с волком
+            CheckWolfCollision();
+            
+            // Увеличение сложности
+            if (score > 0 && score % 5 == 0)
+            {
+                speed = 5 + score / 5;
+            }
+        }
+        
+        private void MoveWolf()
+        {
+            int wolfX = wolf.Location.X;
+            int wolfY = wolf.Location.Y;
+            
+            if (wolfX < rabbit.Location.X) wolfX += 3;
+            else if (wolfX > rabbit.Location.X) wolfX -= 3;
+            
+            if (wolfY < rabbit.Location.Y) wolfY += 3;
+            else if (wolfY > rabbit.Location.Y) wolfY -= 3;
+            
+            wolf.Location = new Point(wolfX, wolfY);
+        }
+        
+        private void CheckCarrotCollision()
+        {
+            for (int i = carrots.Count - 1; i >= 0; i--)
+            {
+                if (rabbit.Bounds.IntersectsWith(carrots[i].Bounds))
+                {
+                    this.Controls.Remove(carrots[i]);
+                    carrots.RemoveAt(i);
+                    score++;
+                    scoreLabel.Text = $"Счет: {score}";
+                    
+                    // Добавляем новую морковку
+                    if (random.Next(0, 3) == 0) // 33% шанс
+                    {
+                        SpawnCarrots(1);
+                    }
+                }
+            }
+            
+            // Если морковок мало, добавим еще
+            if (carrots.Count < 3)
+            {
+                SpawnCarrots(2);
+            }
+        }
+        
+        private void CheckWolfCollision()
+        {
+            if (rabbit.Bounds.IntersectsWith(wolf.Bounds))
+            {
+                gameOver = true;
+                gameTimer.Stop();
+                
+                var gameOverLabel = new Label
+                {
+                    Text = "ИГРА ОКОНЧЕНА!",
+                    Font = new Font("Arial", 32, FontStyle.Bold),
+                    ForeColor = Color.Red,
+                    AutoSize = true,
+                    Location = new Point(
+                        this.ClientSize.Width / 2 - 150,
+                        this.ClientSize.Height / 2 - 50)
+                };
+                this.Controls.Add(gameOverLabel);
+                gameOverLabel.BringToFront();
+            }
+        }
+        
+        [STAThread]
+        public static void Main()
+        {
+            Application.EnableVisualStyles();
+            Application.SetCompatibleTextRenderingDefault(false);
+            Application.Run(new GameForm());
+        }
+    }
+}
